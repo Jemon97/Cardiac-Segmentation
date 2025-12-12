@@ -17,6 +17,9 @@ The model segments the MRI images into 4 classes:
 
 ---
 
+## Dataset Link
+https://www.kaggle.com/datasets/anhoangvo/acdc-dataset
+
 ## Directory Structure
 ```text
 My_Project/
