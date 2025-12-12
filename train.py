@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
-# --- 导入自定义模块 ---
+# --- Import ---
 from config import Config
 from model_unet import UNet
 from dataset import ACDCDataset
@@ -18,7 +18,7 @@ def calculate_dice(preds, targets, num_classes):
     targets: (Batch, H, W)
     """
     dice_scores = []
-    # 从 1 开始遍历 (RV, MYO, LV)
+    # Iterate from 1 (RV, MYO, LV)
     for i in range(1, num_classes):
         pred_i = (preds == i).float()
         target_i = (targets == i).float()
@@ -27,7 +27,7 @@ def calculate_dice(preds, targets, num_classes):
         union = pred_i.sum() + target_i.sum()
         
         if union == 0:
-            # 如果预测和真值都为空，视为完美匹配
+            # If both prediction and ground truth are empty, consider it a perfect match
             dice_scores.append(1.0)
         else:
             dice = (2. * intersection) / (union + 1e-6)
@@ -38,7 +38,7 @@ def calculate_dice(preds, targets, num_classes):
 def main():
     Config.print_config()
     
-    # --- 1. 数据准备 ---
+    # --- 1. data preparation ---
     if not os.path.exists(Config.TRAIN_DIR):
         raise FileNotFoundError(f"Training directory not found: {Config.TRAIN_DIR}")
 
@@ -49,7 +49,7 @@ def main():
         cache=Config.CACHE_DATA
     )
     
-    # 划分 80% 训练, 20% 验证
+    #  80% training, 20% validation
     train_size = int(0.8 * len(full_dataset))
     val_size = len(full_dataset) - train_size
     train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
@@ -72,7 +72,7 @@ def main():
         pin_memory=True
     )
 
-    # --- 2. 模型与优化器 ---
+    # --- 2. Model and Optimizer ---
     model = UNet(n_channels=1, n_classes=Config.NUM_CLASSES).to(Config.DEVICE)
     
     optimizer = optim.Adam(
@@ -83,15 +83,15 @@ def main():
     
     criterion = nn.CrossEntropyLoss()
     
-    # 学习率调度器: 当 Dice 指标不再上升时，减小学习率
+    # Learning rate scheduler: Reduce LR when Dice metric plateaus
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='max', factor=0.5, patience=5, verbose=True
     )
     
-    # 混合精度 Scaler (PyTorch 2.4+ 写法)
+    # Mixed precision Scaler (PyTorch 2.4+ syntax)
     scaler = torch.amp.GradScaler('cuda') if Config.USE_AMP else None
 
-    # --- 3. 训练循环 ---
+    # --- 3. Training Loop ---
     best_dice = 0.0
     early_stop_counter = 0
     
@@ -108,7 +108,7 @@ def main():
             
             optimizer.zero_grad(set_to_none=True)
             
-            # 混合精度前向传播
+            # Mixed Precision Training
             if Config.USE_AMP:
                 with torch.amp.autocast('cuda'):
                     outputs = model(imgs)
@@ -118,7 +118,7 @@ def main():
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                # 普通精度前向传播
+                # Full Precision Training
                 outputs = model(imgs)
                 loss = criterion(outputs, masks)
                 loss.backward()
@@ -138,14 +138,14 @@ def main():
             for imgs, masks in val_loader:
                 imgs, masks = imgs.to(Config.DEVICE), masks.to(Config.DEVICE)
                 
-                # 推理时也可以用 autocast 稍微加速
+                # Use autocast for slight acceleration
                 with torch.amp.autocast('cuda') if Config.USE_AMP else torch.no_grad():
                     outputs = model(imgs)
                     loss = criterion(outputs, masks)
                 
                 val_loss += loss.item()
                 
-                # 计算 Dice
+                # Calculate Dice
                 preds = torch.argmax(outputs, dim=1) # (B, C, H, W) -> (B, H, W)
                 batch_dice = calculate_dice(preds, masks, Config.NUM_CLASSES)
                 val_dice_list.append(batch_dice)
@@ -159,10 +159,10 @@ def main():
         print(f"Val Dice:   {avg_val_dice:.4f} (Best: {best_dice:.4f})")
         print(f"LR:         {optimizer.param_groups[0]['lr']:.2e}")
         
-        # 更新 Scheduler
+        # Update Scheduler
         scheduler.step(avg_val_dice)
         
-        # 保存最佳模型 & 早停逻辑
+        # Save best model & Early stopping
         if avg_val_dice > best_dice:
             best_dice = avg_val_dice
             early_stop_counter = 0

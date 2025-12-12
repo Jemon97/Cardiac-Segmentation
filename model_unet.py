@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-# --- 基础模块: 双卷积层 ---
+# --- Double Convolution Layer ---
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
     def __init__(self, in_channels, out_channels):
@@ -18,7 +18,7 @@ class DoubleConv(nn.Module):
     def forward(self, x):
         return self.double_conv(x)
 
-# --- 主模型: U-Net ---
+# --- Main Model: U-Net ---
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes):
         super(UNet, self).__init__()
@@ -76,24 +76,17 @@ class UNet(nn.Module):
         logits = self.outc(x)
         return logits
 
-# --- Sanity Check (工程化测试代码) ---
+# --- Sanity Check ---
 if __name__ == '__main__':
-    # 这一块代码只有在你直接运行 'python model_unet.py' 时才会执行
-    # 被别的脚本 import 时不会执行
     print("Testing UNet model definition...")
-    
-    # 模拟一个 Batch 的数据 (Batch=2, Channel=1, H=256, W=256)
+
     dummy_input = torch.randn(2, 1, 256, 256)
-    
-    # 实例化模型
     model = UNet(n_channels=1, n_classes=4)
-    
-    # 前向传播
     output = model(dummy_input)
     
     print(f"Input shape:  {dummy_input.shape}")
     print(f"Output shape: {output.shape}")
     
-    # 检查尺寸是否正确 (B, 4, 256, 256)
+    # Check if output shape is correct (B, 4, 256, 256)
     assert output.shape == (2, 4, 256, 256), "Output shape mismatch!"
     print("Test Passed: UNet definition is correct!")

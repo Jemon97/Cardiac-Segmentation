@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import pandas as pd 
 import warnings
+import cv2 
 
 # --- import modules ---
 from config import Config
@@ -116,14 +117,7 @@ def evaluate():
             label_resized = []
             for i in range(num_slices):
                 # Use Nearest interpolation to resize Label
-                import cv2 
-                try:
-                    l_res = cv2.resize(label[i], Config.TARGET_SIZE, interpolation=cv2.INTER_NEAREST)
-                except:
-                    # 如果没有 cv2，用 torch
-                    t = torch.from_numpy(label[i]).unsqueeze(0).unsqueeze(0).float()
-                    l_res = F.interpolate(t, size=Config.TARGET_SIZE, mode='nearest')
-                    l_res = l_res.squeeze().numpy()
+                l_res = cv2.resize(label[i], Config.TARGET_SIZE, interpolation=cv2.INTER_NEAREST)
                 label_resized.append(l_res)
             label_vol = np.array(label_resized)
 
@@ -140,7 +134,7 @@ def evaluate():
                 'Mean_Dice': np.mean(d_list)
             })
 
-    # 3. 结果汇总
+    # 3. Results aggregation
     if not results:
         print("No results generated.")
         return
