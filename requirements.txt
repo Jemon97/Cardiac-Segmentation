@@ -1,0 +1,18 @@
+# --- Core Deep Learning ---
+# 注意: PyTorch 最好去 pytorch.org 根据你的 CUDA 版本单独安装
+# 这里列出是为了确保依赖存在
+torch>=2.0.0
+torchvision
+
+# --- Data Processing ---
+numpy
+h5py
+pandas
+scikit-learn
+
+# --- Image Processing ---
+opencv-python
+matplotlib
+
+# --- Utilities ---
+tqdm

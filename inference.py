@@ -1,0 +1,144 @@
+import os
+import h5py
+import numpy as np
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+# --- 导入自定义模块 ---
+from config import Config
+from model_unet import UNet
+
+def load_model():
+    """加载训练好的模型"""
+    print(f"Loading model from {Config.MODEL_SAVE_PATH}...")
+    
+    model = UNet(n_channels=1, n_classes=Config.NUM_CLASSES)
+    
+    # weights_only=True 是 PyTorch 新版的安全建议
+    if os.path.exists(Config.MODEL_SAVE_PATH):
+        state_dict = torch.load(Config.MODEL_SAVE_PATH, map_location=Config.DEVICE, weights_only=True)
+        model.load_state_dict(state_dict)
+    else:
+        raise FileNotFoundError(f"Model file not found at {Config.MODEL_SAVE_PATH}. Please train first.")
+        
+    model.to(Config.DEVICE)
+    model.eval()
+    return model
+
+def preprocess_slice(slice_np):
+    """
+    单张切片预处理 (必须与 Dataset 逻辑一致)
+    Input: (H, W) numpy
+    Output: (1, 1, H, W) tensor on device
+    """
+    # 1. 转 Tensor
+    tensor = torch.from_numpy(slice_np).float()
+    
+    # 2. 增加维度 (H, W) -> (1, 1, H, W)
+    if tensor.ndim == 2:
+        tensor = tensor.unsqueeze(0).unsqueeze(0)
+        
+    # 3. Resize
+    resized = F.interpolate(tensor, size=Config.TARGET_SIZE, mode='bilinear', align_corners=False)
+    
+    # 4. Normalize (0-1)
+    img_min, img_max = resized.min(), resized.max()
+    if img_max > img_min:
+        resized = (resized - img_min) / (img_max - img_min)
+        
+    return resized.to(Config.DEVICE)
+
+def predict_volume(model, volume_np):
+    """
+    对 3D 体积进行逐层预测
+    Input: (Slices, H, W)
+    Output: (Slices, 256, 256)
+    """
+    num_slices = volume_np.shape[0]
+    predictions = []
+    
+    with torch.no_grad():
+        for i in range(num_slices):
+            slice_img = volume_np[i]
+            input_tensor = preprocess_slice(slice_img)
+            
+            # 推理
+            logits = model(input_tensor)
+            pred_mask = torch.argmax(logits, dim=1) # (1, H, W)
+            
+            predictions.append(pred_mask.squeeze().cpu().numpy())
+            
+    return np.array(predictions)
+
+def visualize_prediction(slice_img, pred_mask, gt_mask=None, slice_idx=0):
+    """可视化对比图"""
+    plt.figure(figsize=(12, 4))
+    
+    # 1. 原图
+    plt.subplot(1, 3, 1)
+    plt.imshow(slice_img, cmap='gray')
+    plt.title(f"MRI Slice {slice_idx}")
+    plt.axis('off')
+    
+    # 2. 预测
+    plt.subplot(1, 3, 2)
+    plt.imshow(pred_mask, cmap='viridis', vmin=0, vmax=Config.NUM_CLASSES-1)
+    plt.title("Prediction")
+    plt.axis('off')
+    
+    # 3. 真值 (如果存在)
+    plt.subplot(1, 3, 3)
+    if gt_mask is not None:
+        plt.imshow(gt_mask, cmap='viridis', vmin=0, vmax=Config.NUM_CLASSES-1)
+        plt.title("Ground Truth")
+    else:
+        plt.text(0.5, 0.5, "No GT Available", ha='center')
+        plt.title("Ground Truth")
+    plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == '__main__':
+    # 1. 检查测试数据
+    if not os.path.exists(Config.TEST_DIR):
+        print(f"Error: Test directory {Config.TEST_DIR} not found.")
+        exit()
+        
+    test_files = [f for f in os.listdir(Config.TEST_DIR) if f.endswith('.h5')]
+    if not test_files:
+        print("No .h5 files found in test folder.")
+        exit()
+
+    # 2. 加载模型
+    model = load_model()
+    
+    # 3. 运行单个样本测试
+    sample_file = os.path.join(Config.TEST_DIR, test_files[0]) # 取第一个文件
+    print(f"Processing: {test_files[0]} ...")
+    
+    with h5py.File(sample_file, 'r') as f:
+        # 读取数据
+        vol_img = f['image'][:] # (Slices, H, W)
+        vol_gt = f['label'][:] if 'label' in f else None
+        
+        # 3D 预测
+        vol_pred = predict_volume(model, vol_img)
+        
+        print(f"Prediction Complete. Output Shape: {vol_pred.shape}")
+        
+        # 可视化中间切片
+        mid_idx = vol_img.shape[0] // 2
+        
+        
+        # 为了 overlay 准确，我们简单取原图的 resize 版本用于显示
+        import cv2 # 可选，没有就跳过
+        try:
+            disp_img = cv2.resize(vol_img[mid_idx], Config.TARGET_SIZE)
+            disp_gt = cv2.resize(vol_gt[mid_idx], Config.TARGET_SIZE, interpolation=cv2.INTER_NEAREST) if vol_gt is not None else None
+        except:
+            disp_img = vol_img[mid_idx]
+            disp_gt = vol_gt[mid_idx] if vol_gt is not None else None
+
+        visualize_prediction(disp_img, vol_pred[mid_idx], disp_gt, slice_idx=mid_idx)
