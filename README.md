@@ -1,7 +1,7 @@
 # Cardiac MRI Segmentation using U-Net (PyTorch)
 
 ## Project Overview
-This project implements a 2D U-Net architecture for automatic segmentation of cardiac structures from Magnetic Resonance Imaging (MRI) data. It is designed for the **ACDC (Automated Cardiac Diagnosis Challenge)** dataset but can be adapted for other 2D medical imaging segmentation tasks.
+This project implements a 2D U-Net architecture for automatic segmentation of cardiac structures from Magnetic Resonance Imaging (MRI) data. It is designed for the **ACDC** dataset but can be adapted for other 2D medical imaging segmentation tasks.
 
 The model segments the MRI images into 4 classes:
 - **0**: Background
