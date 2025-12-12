@@ -13,7 +13,7 @@ from dataset import ACDCDataset
 
 def calculate_dice(preds, targets, num_classes):
     """
-    计算验证集的平均 Dice Score (忽略背景类 0)
+    Calculate Dice Score (ignore background class 0)
     preds: (Batch, H, W)
     targets: (Batch, H, W)
     """

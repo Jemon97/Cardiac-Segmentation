@@ -29,7 +29,6 @@ def load_model():
 
 def preprocess_slice(slice_np):
     """
-    单张切片预处理 (必须与 Dataset 逻辑一致)
     Input: (H, W) numpy
     Output: (1, 1, H, W) tensor on device
     """
@@ -64,7 +63,7 @@ def predict_volume(model, volume_np):
             slice_img = volume_np[i]
             input_tensor = preprocess_slice(slice_img)
             
-            # 推理
+            # inference
             logits = model(input_tensor)
             pred_mask = torch.argmax(logits, dim=1) # (1, H, W)
             
